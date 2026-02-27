@@ -295,15 +295,28 @@ async def realtime_asr(
                     elif response.type == ResponseType.INTERIM_RESULT:
                         # 计算增量：只返回相比上次新增的部分
                         full_text = response.text or ""
-                        delta = full_text[len(previous_text):] if full_text.startswith(previous_text) else full_text
-                        previous_text = full_text
-                        if delta:  # 有新增内容才发送
+                        if full_text.startswith(previous_text):
+                            # 正常追加模式：只返回新增部分
+                            delta = full_text[len(previous_text):]
+                            previous_text = full_text
+                            if delta:
+                                await ws.send_json({
+                                    "event_id": _gen_id(),
+                                    "type": "conversation.item.input_audio_transcription.delta",
+                                    "item_id": current_item_id,
+                                    "content_index": content_index,
+                                    "delta": delta,
+                                })
+                        else:
+                            # 修正模式：ASR 修正了之前的识别结果
+                            # 发送 corrected 事件，客户端应用这个替换之前的 delta 拼接结果
+                            previous_text = full_text
                             await ws.send_json({
                                 "event_id": _gen_id(),
-                                "type": "conversation.item.input_audio_transcription.delta",
+                                "type": "conversation.item.input_audio_transcription.corrected",
                                 "item_id": current_item_id,
                                 "content_index": content_index,
-                                "delta": delta,
+                                "transcript": full_text,  # 完整的修正后文本，客户端用它替换之前的 delta 拼接
                             })
 
                     elif response.type == ResponseType.FINAL_RESULT:
