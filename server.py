@@ -278,6 +278,7 @@ async def realtime_asr(
             config = get_config()
             content_index = 0
             previous_text = ""  # 用于计算增量 delta
+            previous_item_id = None  # 用于 committed 的 previous_item_id
 
             async for response in transcribe_realtime(audio_producer(), config=config):
                 try:
@@ -314,6 +315,14 @@ async def realtime_asr(
                             previous_text = full_text
 
                     elif response.type == ResponseType.FINAL_RESULT:
+                        # 先发 committed（告诉客户端这句话断句了，带排序信息）
+                        await ws.send_json({
+                            "event_id": _gen_id(),
+                            "type": "input_audio_buffer.committed",
+                            "item_id": current_item_id,
+                            "previous_item_id": previous_item_id,
+                        })
+                        # 再发 completed（最终识别结果）
                         await ws.send_json({
                             "event_id": _gen_id(),
                             "type": "conversation.item.input_audio_transcription.completed",
@@ -321,12 +330,20 @@ async def realtime_asr(
                             "content_index": content_index,
                             "transcript": response.text,
                         })
+                        previous_item_id = current_item_id
+                        current_item_id = _gen_id("item")  # 为下一句生成新的 item_id
                         content_index += 1
                         previous_text = ""  # 最终结果后重置
 
                     elif response.type == ResponseType.SESSION_FINISHED:
-                        # 如果还有未完成的句子，发送 completed 事件
+                        # 如果还有未完成的句子，发送 committed + completed
                         if previous_text:
+                            await ws.send_json({
+                                "event_id": _gen_id(),
+                                "type": "input_audio_buffer.committed",
+                                "item_id": current_item_id,
+                                "previous_item_id": previous_item_id,
+                            })
                             await ws.send_json({
                                 "event_id": _gen_id(),
                                 "type": "conversation.item.input_audio_transcription.completed",
@@ -334,18 +351,11 @@ async def realtime_asr(
                                 "content_index": content_index,
                                 "transcript": previous_text,
                             })
-                            content_index += 1
-                            previous_text = ""
                         
                         await ws.send_json({
                             "event_id": _gen_id(),
                             "type": "input_audio_buffer.speech_stopped",
                             "audio_end_ms": total_audio_ms,
-                            "item_id": current_item_id,
-                        })
-                        await ws.send_json({
-                            "event_id": _gen_id(),
-                            "type": "input_audio_buffer.committed",
                             "item_id": current_item_id,
                         })
 
