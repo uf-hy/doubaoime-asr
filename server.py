@@ -309,15 +309,9 @@ async def realtime_asr(
                                 })
                         else:
                             # 修正模式：ASR 修正了之前的识别结果
-                            # 发送 corrected 事件，客户端应用这个替换之前的 delta 拼接结果
+                            # 不发送 delta（保持 OpenAI Realtime 兼容）
+                            # 等 completed 给出最终结果
                             previous_text = full_text
-                            await ws.send_json({
-                                "event_id": _gen_id(),
-                                "type": "conversation.item.input_audio_transcription.corrected",
-                                "item_id": current_item_id,
-                                "content_index": content_index,
-                                "transcript": full_text,  # 完整的修正后文本，客户端用它替换之前的 delta 拼接
-                            })
 
                     elif response.type == ResponseType.FINAL_RESULT:
                         await ws.send_json({
