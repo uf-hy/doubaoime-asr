@@ -221,7 +221,7 @@ async def realtime_asr(
     if not key:
         protocol = ws.headers.get("sec-websocket-protocol", "")
         for p in (x.strip() for x in protocol.split(",")):
-            if p.startswith(("fu-", "sk-")):
+            if p not in ("realtime", "openai-realtime", "openai-beta.realtime-v1"):
                 key = p
                 break
 
