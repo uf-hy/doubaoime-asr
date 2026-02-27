@@ -181,6 +181,7 @@ docker run -d \
   -p 8000:8000 \
   -v ./data:/data \
   -e API_KEY="your-api-key" \
+  -e CREDENTIAL_PATH="/data/credentials.json" \
   ghcr.io/uf-hy/doubaoime-asr:main
 ```
 

@@ -7,10 +7,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .[server]
-
 COPY . .
+
+RUN pip install --no-cache-dir .[server] cryptography
 
 RUN mkdir -p /data
 

@@ -1,0 +1,10 @@
+.env
+data/
+credentials.json
+__pycache__/
+*.py[cod]
+.git/
+.github/
+*.egg-info/
+dist/
+build/

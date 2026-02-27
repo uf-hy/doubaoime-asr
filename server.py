@@ -64,17 +64,13 @@ def get_config():
 
 
 def build_session_object(
-    session_id: str,
     model: str,
     input_format: str = "audio/pcm",
     rate: int = 24000,
     language: str = "zh",
 ) -> dict:
-    """构建 OpenAI Realtime 转写会话对象"""
+    """构建 OpenAI Realtime 转写会话配置（不含 id/object，由调用方补充）"""
     return {
-        "id": session_id,
-        "object": "realtime.session",
-        "type": "transcription",
         "model": model,
         "modalities": ["text"],
         "audio": {
@@ -186,7 +182,7 @@ async def create_transcription_session(key: str = Security(verify_key)):
             "value": API_KEY,
             "expires_at": int(time.time()) + 3600,
         },
-        **build_session_object(session_id, "doubao-asr"),
+        **build_session_object("doubao-asr"),
     })
 
 
@@ -220,8 +216,9 @@ async def realtime_asr(
             key = auth_header[7:]
     if not key:
         protocol = ws.headers.get("sec-websocket-protocol", "")
+        known_protocols = {"realtime", "openai-realtime", "openai-beta.realtime-v1"}
         for p in (x.strip() for x in protocol.split(",")):
-            if p not in ("realtime", "openai-realtime", "openai-beta.realtime-v1"):
+            if p and p not in known_protocols:
                 key = p
                 break
 
@@ -229,9 +226,14 @@ async def realtime_asr(
         await ws.close(code=4001, reason="Invalid or missing API key")
         return
 
+    # ── 子协议协商 ──
     subprotocol = None
-    if "realtime" in ws.headers.get("sec-websocket-protocol", ""):
-        subprotocol = "realtime"
+    supported = ("openai-beta.realtime-v1", "openai-realtime", "realtime")
+    requested = [x.strip() for x in ws.headers.get("sec-websocket-protocol", "").split(",") if x.strip()]
+    for sp in supported:
+        if sp in requested:
+            subprotocol = sp
+            break
     await ws.accept(subprotocol=subprotocol)
 
     # ── 会话状态 ──
@@ -245,10 +247,15 @@ async def realtime_asr(
     await ws.send_json({
         "event_id": _gen_id(),
         "type": "session.created",
-        "session": build_session_object(session_id, model, rate=input_rate, language=language),
+        "session": {
+            "id": session_id,
+            "object": "realtime.session",
+            "type": "transcription",
+            **build_session_object(model, rate=input_rate, language=language),
+        },
     })
 
-    audio_queue: asyncio.Queue = asyncio.Queue()
+    audio_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     stop_event = asyncio.Event()
     transcription_task = None
 
@@ -256,12 +263,12 @@ async def realtime_asr(
         """从队列中读取音频块，供 transcribe_realtime 消费"""
         while not stop_event.is_set():
             try:
-                chunk = await asyncio.wait_for(audio_queue.get(), timeout=30.0)
+                chunk = await asyncio.wait_for(audio_queue.get(), timeout=60.0)
                 if chunk is None:
                     break
                 yield chunk
             except asyncio.TimeoutError:
-                break
+                continue
 
     async def run_transcription():
         """运行实时转写，将结果通过 WebSocket 发回"""
@@ -394,7 +401,6 @@ async def realtime_asr(
                         pass
 
             elif msg_type == "input_audio_buffer.commit":
-                await audio_queue.put(None)
                 await ws.send_json({
                     "event_id": _gen_id(),
                     "type": "input_audio_buffer.committed",
@@ -430,9 +436,14 @@ async def realtime_asr(
                 await ws.send_json({
                     "event_id": _gen_id(),
                     "type": "session.updated",
-                    "session": build_session_object(
-                        session_id, model, rate=input_rate, language=language
-                    ),
+                    "session": {
+                        "id": session_id,
+                        "object": "realtime.session",
+                        "type": "transcription",
+                        **build_session_object(
+                            model, rate=input_rate, language=language
+                        ),
+                    },
                 })
 
             elif msg_type == "response.create":
