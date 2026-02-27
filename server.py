@@ -429,11 +429,7 @@ async def realtime_asr(
 
             elif msg_type == "input_audio_buffer.commit":
                 await audio_queue.put(None)
-                await ws.send_json({
-                    "event_id": _gen_id(),
-                    "type": "input_audio_buffer.committed",
-                    "item_id": current_item_id,
-                })
+                # committed 由 SESSION_FINISHED 统一发送，避免重复
 
             elif msg_type == "input_audio_buffer.clear":
                 while not audio_queue.empty():
