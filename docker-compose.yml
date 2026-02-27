@@ -1,0 +1,13 @@
+services:
+  doubaoime-asr:
+    build: .
+    container_name: doubaoime-asr
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -167,6 +167,52 @@ async def transcribe_realtime(
 | `SESSION_FINISHED` | 会话结束 |
 | `ERROR` | 错误 |
 
+## HTTP 服务端（OpenAI 兼容）
+
+提供 OpenAI Whisper / Realtime API 兼容的 HTTP 服务端，方便集成到现有工具链。
+
+### Docker 部署（推荐）
+
+```bash
+# 复制配置文件
+cp .env.example .env
+# 按需编辑 .env（设置 API_KEY 等）
+
+docker compose up -d
+```
+
+服务默认监听 `8000` 端口。
+
+### 手动运行
+
+```bash
+pip install doubaoime-asr[server]
+
+# 通过环境变量配置
+export API_KEY="your-api-key"        # 留空则不启用认证
+export CREDENTIAL_PATH="./credentials.json"
+
+python server.py
+```
+
+### 接口说明
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/audio/transcriptions` | POST | Whisper 兼容的非流式识别 |
+| `/v1/realtime` | WebSocket | OpenAI Realtime API 兼容的实时流式识别 |
+| `/v1/realtime/transcription_sessions` | POST | 创建转写会话 |
+| `/v1/models` | GET | 模型列表 |
+
+非流式识别示例：
+
+```bash
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -H "Authorization: Bearer your-api-key" \
+  -F "file=@audio.wav" \
+  -F "model=doubao-asr"
+```
+
 ## 凭据管理
 
 首次使用时会自动向服务器注册虚拟设备（设备参数定义在 `constants.py` 的 `DEFAULT_DEVICE_CONFIG` 中）并获取认证 Token。
