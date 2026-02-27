@@ -325,6 +325,18 @@ async def realtime_asr(
                         previous_text = ""  # 最终结果后重置
 
                     elif response.type == ResponseType.SESSION_FINISHED:
+                        # 如果还有未完成的句子，发送 completed 事件
+                        if previous_text:
+                            await ws.send_json({
+                                "event_id": _gen_id(),
+                                "type": "conversation.item.input_audio_transcription.completed",
+                                "item_id": current_item_id,
+                                "content_index": content_index,
+                                "transcript": previous_text,
+                            })
+                            content_index += 1
+                            previous_text = ""
+                        
                         await ws.send_json({
                             "event_id": _gen_id(),
                             "type": "input_audio_buffer.speech_stopped",
