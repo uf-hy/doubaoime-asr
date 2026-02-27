@@ -173,23 +173,44 @@ async def transcribe_realtime(
 
 ### Docker 部署（推荐）
 
+**方式一：使用预构建镜像**
+
 ```bash
-# 复制配置文件
+docker run -d \
+  --name doubaoime-asr \
+  -p 8000:8000 \
+  -v ./data:/data \
+  -e API_KEY="your-api-key" \
+  ghcr.io/uf-hy/doubaoime-asr:main
+```
+
+**方式二：从源码构建**
+
+```bash
+git clone https://github.com/uf-hy/doubaoime-asr.git
+cd doubaoime-asr
+
+# 复制并编辑配置
 cp .env.example .env
-# 按需编辑 .env（设置 API_KEY 等）
 
 docker compose up -d
 ```
 
-服务默认监听 `8000` 端口。
+### 环境变量
 
-### 手动运行
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `API_KEY` | 空（不启用认证） | HTTP/WebSocket 接口的 Bearer Token，留空则任何人都可以调用 |
+| `CREDENTIAL_PATH` | `./credentials.json` | 设备凭据缓存路径，Docker 中建议设为 `/data/credentials.json` |
+
+> 凭据文件会在首次请求时自动生成（自动注册虚拟设备），挂载 `./data:/data` 可以持久化凭据避免重复注册。
+
+### 手动运行（不用 Docker）
 
 ```bash
 pip install doubaoime-asr[server]
 
-# 通过环境变量配置
-export API_KEY="your-api-key"        # 留空则不启用认证
+export API_KEY="your-api-key"
 export CREDENTIAL_PATH="./credentials.json"
 
 python server.py
