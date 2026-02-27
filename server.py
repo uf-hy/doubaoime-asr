@@ -277,12 +277,14 @@ async def realtime_asr(
             from doubaoime_asr import transcribe_realtime, ResponseType
             config = get_config()
             content_index = 0
+            previous_text = ""  # 用于计算增量 delta
 
             async for response in transcribe_realtime(audio_producer(), config=config):
                 try:
                     if response.type == ResponseType.VAD_START:
                         current_item_id = _gen_id("item")
                         audio_start_ts = total_audio_ms
+                        previous_text = ""  # 新的语音段，重置增量基准
                         await ws.send_json({
                             "event_id": _gen_id(),
                             "type": "input_audio_buffer.speech_started",
@@ -291,13 +293,18 @@ async def realtime_asr(
                         })
 
                     elif response.type == ResponseType.INTERIM_RESULT:
-                        await ws.send_json({
-                            "event_id": _gen_id(),
-                            "type": "conversation.item.input_audio_transcription.delta",
-                            "item_id": current_item_id,
-                            "content_index": content_index,
-                            "delta": response.text,
-                        })
+                        # 计算增量：只返回相比上次新增的部分
+                        full_text = response.text or ""
+                        delta = full_text[len(previous_text):] if full_text.startswith(previous_text) else full_text
+                        previous_text = full_text
+                        if delta:  # 有新增内容才发送
+                            await ws.send_json({
+                                "event_id": _gen_id(),
+                                "type": "conversation.item.input_audio_transcription.delta",
+                                "item_id": current_item_id,
+                                "content_index": content_index,
+                                "delta": delta,
+                            })
 
                     elif response.type == ResponseType.FINAL_RESULT:
                         await ws.send_json({
@@ -308,6 +315,7 @@ async def realtime_asr(
                             "transcript": response.text,
                         })
                         content_index += 1
+                        previous_text = ""  # 最终结果后重置
 
                     elif response.type == ResponseType.SESSION_FINISHED:
                         await ws.send_json({
