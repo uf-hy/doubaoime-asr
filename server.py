@@ -401,6 +401,7 @@ async def realtime_asr(
                         pass
 
             elif msg_type == "input_audio_buffer.commit":
+                await audio_queue.put(None)
                 await ws.send_json({
                     "event_id": _gen_id(),
                     "type": "input_audio_buffer.committed",
